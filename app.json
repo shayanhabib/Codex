@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "LoopUp",
+    "slug": "loopup",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#09090F"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.loopup.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#09090F"
+      },
+      "package": "com.loopup.app"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router", "expo-notifications"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
