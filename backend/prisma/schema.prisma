@@ -1,0 +1,488 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ModerationStatus {
+  ACTIVE
+  HIDDEN
+  DELETED
+  SUSPENDED
+}
+
+enum PostType {
+  TEXT
+  IMAGE
+  VOICE
+}
+
+enum Visibility {
+  PUBLIC
+  FOLLOWERS
+  PRIVATE
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  MISSION_REWARD
+  STREAK_REWARD
+  PURCHASE_SUCCESS
+  ACHIEVEMENT_UNLOCK
+  SYSTEM
+}
+
+enum WalletTransactionType {
+  DAILY_LOGIN_REWARD
+  POST_REWARD
+  LIKE_REWARD
+  GAME_REWARD
+  REFERRAL_BONUS
+  DAILY_SPIN_REWARD
+  CHALLENGE_REWARD
+  SHOP_PURCHASE
+  BOOST_PURCHASE
+  PREMIUM_PURCHASE
+  COIN_PACK_PURCHASE
+  REWARDED_AD_BONUS
+}
+
+enum MissionActionType {
+  CREATE_POST
+  COMMENT
+  LIKE_POST
+  PLAY_GAME
+  INVITE_FRIEND
+}
+
+enum GameType {
+  TAP_RUSH
+  MEMORY_FLIP
+}
+
+enum ShopItemType {
+  BADGE
+  PROFILE_THEME
+  AVATAR_FRAME
+  EXTRA_SPIN_TICKET
+  EXTRA_GAME_ATTEMPT
+  POST_BOOST
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ReportType {
+  POST
+  COMMENT
+  USER
+}
+
+enum ReviewStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+  REJECTED
+}
+
+model User {
+  id                String             @id @default(cuid())
+  name              String
+  username          String             @unique
+  email             String?            @unique
+  passwordHash      String?
+  role              UserRole           @default(USER)
+  avatarUrl         String?
+  bio               String?
+  coinBalance       Int                @default(0)
+  streakCount       Int                @default(0)
+  lastLoginClaimAt  DateTime?
+  premiumStatus     Boolean            @default(false)
+  premiumEndsAt     DateTime?
+  referralCode      String             @unique
+  referredById      String?
+  suspended         Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  profile           Profile?
+  refreshTokens     RefreshToken[]
+  posts             Post[]
+  comments          Comment[]
+  likes             Like[]
+  followers         Follow[]           @relation("followers")
+  following         Follow[]           @relation("following")
+  notifications     Notification[]     @relation("notificationUser")
+  actorNotifications Notification[]    @relation("notificationActor")
+  walletTransactions WalletTransaction[]
+  dailyRewardClaims DailyRewardClaim[]
+  missionProgress   UserMissionProgress[]
+  achievements      UserAchievement[]
+  gameResults       GameResult[]
+  inventoryItems    UserInventoryItem[]
+  spinHistory       SpinHistory[]
+  referralsSent     Referral[]         @relation("referralInviter")
+  referralsReceived Referral[]         @relation("referralInvitee")
+  purchases         Purchase[]
+  subscriptions     Subscription[]
+  reportsFiled      Report[]           @relation("reporter")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Profile {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  theme      String?
+  frame      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id            String            @id @default(cuid())
+  userId        String
+  type          PostType
+  text          String?
+  mediaUrl      String?
+  audioUrl      String?
+  caption       String?
+  visibility    Visibility        @default(PUBLIC)
+  boostedUntil  DateTime?
+  moderation    ModerationStatus  @default(ACTIVE)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments      Comment[]
+  likes         Like[]
+  reports       Report[]
+
+  @@index([userId, createdAt])
+  @@index([boostedUntil])
+}
+
+model Comment {
+  id            String            @id @default(cuid())
+  postId         String
+  userId         String
+  content        String
+  moderation     ModerationStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports Report[]
+
+  @@index([postId, createdAt])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model Follow {
+  id           String   @id @default(cuid())
+  followerId   String
+  followingId  String
+  createdAt    DateTime @default(now())
+
+  follower  User @relation("following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  actorId    String?
+  type       NotificationType
+  title      String
+  body       String
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  user  User  @relation("notificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("notificationActor", fields: [actorId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model WalletTransaction {
+  id          String                @id @default(cuid())
+  userId      String
+  amount      Int
+  type        WalletTransactionType
+  description String?
+  metadata    Json?
+  createdAt   DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model DailyRewardClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime
+  reward    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+}
+
+model MissionTemplate {
+  id           String           @id @default(cuid())
+  code         String           @unique
+  title        String
+  description  String
+  actionType   MissionActionType
+  targetCount  Int
+  rewardCoins  Int
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  userProgress UserMissionProgress[]
+}
+
+model UserMissionProgress {
+  id            String   @id @default(cuid())
+  userId        String
+  missionId      String
+  date          DateTime
+  progressCount Int      @default(0)
+  claimedAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission  MissionTemplate @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, missionId, date])
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  title       String
+  description String
+  rewardCoins Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+model GameResult {
+  id         String   @id @default(cuid())
+  userId     String
+  gameType   GameType
+  score      Int
+  accuracy   Float?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gameType, score])
+  @@index([userId, createdAt])
+}
+
+model LeaderboardSnapshot {
+  id        String   @id @default(cuid())
+  period    String
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([period, createdAt])
+}
+
+model ShopItem {
+  id           String      @id @default(cuid())
+  code         String      @unique
+  title        String
+  description  String
+  itemType     ShopItemType
+  priceCoins   Int
+  premiumOnly  Boolean     @default(false)
+  active       Boolean     @default(true)
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  inventoryItems UserInventoryItem[]
+}
+
+model UserInventoryItem {
+  id          String   @id @default(cuid())
+  userId      String
+  shopItemId  String
+  quantity    Int      @default(1)
+  equipped    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopItem ShopItem @relation(fields: [shopItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, shopItemId])
+}
+
+model SpinHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  rewardType String
+  rewardData Json
+  paidSpin   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Referral {
+  id         String   @id @default(cuid())
+  inviterId  String
+  inviteeId  String   @unique
+  code       String
+  rewardedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  inviter User @relation("referralInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User @relation("referralInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([inviterId])
+}
+
+model CoinPack {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  coins      Int
+  priceCents Int
+  currency   String   @default("USD")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+}
+
+model Purchase {
+  id          String         @id @default(cuid())
+  userId      String
+  coinPackId  String?
+  amountCents Int
+  currency    String         @default("USD")
+  status      PurchaseStatus @default(PENDING)
+  provider    String?
+  providerRef String?
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coinPack CoinPack? @relation(fields: [coinPackId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model PremiumPlan {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  title              String
+  priceCents         Int
+  durationDays       Int
+  doubleDailyReward  Boolean  @default(false)
+  adFree             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id          String   @id @default(cuid())
+  userId      String
+  planId      String
+  startsAt    DateTime
+  endsAt      DateTime
+  active      Boolean  @default(true)
+  provider    String?
+  providerRef String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan PremiumPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId, active])
+}
+
+model Report {
+  id               String       @id @default(cuid())
+  reporterId       String
+  type             ReportType
+  postId           String?
+  commentId        String?
+  reportedUserId   String?
+  reason           String
+  reviewStatus     ReviewStatus @default(OPEN)
+  reviewedById     String?
+  reviewedAt       DateTime?
+  createdAt        DateTime     @default(now())
+
+  reporter User @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  post Post? @relation(fields: [postId], references: [id])
+  comment Comment? @relation(fields: [commentId], references: [id])
+
+  @@index([type, reviewStatus])
+}
